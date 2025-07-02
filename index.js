@@ -2,10 +2,11 @@ import express from 'express';
 import path from 'path';
 import jwt from 'jsonwebtoken';
 import { authMiddleware } from './middlewares/auth.js';
-
-// File Store
-const DB = [];
-const DB_INDEX = new Set();
+import {
+  createFileRecord,
+  getAllFileRecords,
+  getFileRecordById,
+} from './db.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -14,9 +15,11 @@ app.use(express.json());
 app.use(express.static(path.resolve('./public')));
 app.use(authMiddleware);
 
-app.get('/files', (req, res) => {
+app.get('/files', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Please login' });
-  const files = DB.map((e) => ({ id: e.id, filename: e.filename }));
+
+  const files = await getAllFileRecords();
+
   return res.status(200).json({ files });
 });
 
@@ -30,26 +33,29 @@ app.post('/share-file', (req, res) => {
     .json({ error: 'Sorry! We do not have this feature yet' });
 });
 
-app.post('/create-file', (req, res) => {
+app.post('/create-file', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Please login' });
 
   const { id, filename } = req.body;
 
-  if (DB_INDEX.has(id)) {
+  const existingFile = await getFileRecordById(id);
+
+  if (existingFile) {
     return res
       .status(400)
       .json({ error: `file with id ${id} already exists!` });
   }
 
-  DB.push({ id, filename });
-  DB_INDEX.add(id);
+  await createFileRecord({ id, filename });
 
   return res.status(201).json({ message: 'File created success!' });
 });
 
 app.post('/signup', (req, res) => {
   const { username, email } = req.body;
+
   const token = jwt.sign({ username, email }, 'mysupersecret');
+
   return res.json({ username, token });
 });
 
