@@ -7,6 +7,7 @@ import {
   getAllFileRecords,
   getFileRecordById,
 } from './db.js';
+import { fgaClient } from './openfga.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 8000;
@@ -18,19 +19,36 @@ app.use(authMiddleware);
 app.get('/files', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Please login' });
 
-  const files = await getAllFileRecords();
+  const allowedFiles = await fgaClient.listObjects({
+    user: `user:${req.user.username}`,
+    relation: 'can_view',
+    type: 'file',
+  });
 
-  return res.status(200).json({ files });
+  const allowedFileIds = allowedFiles.objects.map((obj) => obj.split(':')[1]);
+
+  const files = await getAllFileRecords();
+  const allowed = files.filter((e) => allowedFileIds.includes(e.id));
+
+  return res.status(200).json({ files: allowed });
 });
 
-app.post('/share-file', (req, res) => {
+app.post('/share-file', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Please login' });
 
   const { id, username } = req.body;
 
-  return res
-    .status(400)
-    .json({ error: 'Sorry! We do not have this feature yet' });
+  await fgaClient.write({
+    writes: [
+      {
+        user: `user:${username}`,
+        relation: 'viewer',
+        object: `file:${id}`,
+      },
+    ],
+  });
+
+  return res.status(200).json({ message: 'Access Added' });
 });
 
 app.post('/create-file', async (req, res) => {
@@ -47,6 +65,15 @@ app.post('/create-file', async (req, res) => {
   }
 
   await createFileRecord({ id, filename });
+  await fgaClient.write({
+    writes: [
+      {
+        user: `user:${req.user.username}`,
+        relation: 'owner',
+        object: `file:${id}`,
+      },
+    ],
+  });
 
   return res.status(201).json({ message: 'File created success!' });
 });
