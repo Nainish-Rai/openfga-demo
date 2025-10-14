@@ -1,34 +1,20 @@
-import fs from 'fs/promises';
-import path from 'path';
+import mongoose from "mongoose";
+import dotenv from "dotenv";
 
-const dataPath = path.resolve('data/files.json');
+dotenv.config();
 
-/**
- *
- * @returns {Promise<{ id: string; filename: string }[]>} records
- */
-export async function getAllFileRecords() {
-  const records = await fs.readFile(dataPath, 'utf-8');
-  return records ? JSON.parse(records) : [];
+let isConnected = false;
+
+export async function connectMongo() {
+  if (isConnected) return mongoose.connection;
+  const uri = process.env.MONGO_URI || "mongodb://localhost:27017/compliance";
+  await mongoose.connect(uri, { dbName: undefined });
+  isConnected = true;
+  return mongoose.connection;
 }
 
-/**
- *
- * @param {string} id
- * @returns {Promise<{ id: string; filename: string } | undefined>}
- */
-export async function getFileRecordById(id) {
-  const existingRecords = await getAllFileRecords();
-  return existingRecords.find((e) => e.id === id);
-}
-
-/**
- *
- * @param {{ id: string; filename: string }} payload
- */
-export async function createFileRecord(payload) {
-  const { id, filename } = payload;
-  const existingRecords = await getAllFileRecords();
-  existingRecords.push({ id, filename });
-  await fs.writeFile(dataPath, JSON.stringify(existingRecords), 'utf-8');
+export function disconnectMongo() {
+  if (!isConnected) return;
+  isConnected = false;
+  return mongoose.disconnect();
 }

@@ -28,3 +28,19 @@ Inspired by real-world authorization use-cases from platforms like **Google Driv
 ├── README.md              # You're here :)
 └── package.json
 ```
+
+## Mongo + Compliance model
+
+- Copy .env.example to .env and set Mongo and OpenFGA envs.
+- docker compose up -d
+- pnpm i; pnpm dev
+
+Endpoints
+
+- POST /signup
+- POST /api/department
+- POST /api/person
+- POST /api/circular
+- POST /api/clause
+- POST /api/task
+- POST /api/access/check

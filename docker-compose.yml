@@ -1,21 +1,33 @@
-version: '3.8'
+version: "3.8"
 
 networks:
   openfga:
 
 services:
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    networks:
+      - openfga
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   postgres:
     image: postgres:17
     container_name: postgres
     networks:
       - openfga
     ports:
-      - '5432:5432'
+      - "5432:5432"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -48,8 +60,8 @@ services:
       - openfga
     ports:
       # Needed for the http server
-      - '8080:8080'
+      - "8080:8080"
       # Needed for the grpc server (if used)
-      - '8081:8081'
+      - "8081:8081"
       # Needed for the playground (Do not enable in prod!)
-      - '3000:3000'
+      - "3000:3000"
