@@ -2,14 +2,22 @@ import express from "express";
 import { connectMongo } from "./db.js";
 import Department from "./models/Department.js";
 import Person from "./models/Person.js";
-import Circular from "./models/Circular.js";
-import Clause from "./models/Clause.js";
-import Task from "./models/Task.js";
 import { map, upsertTuples } from "./services/tupleSync.js";
+import { fgaClient } from "./openfga.js";
+
+import circularsRouter from "./controllers/circulars.js";
+import clausesRouter from "./controllers/clauses.js";
+import tasksRouter from "./controllers/tasks.js";
+import sharingRouter from "./controllers/sharing.js";
 
 const router = express.Router();
 
-router.post("/department", async (req, res) => {
+router.use("/circulars", circularsRouter);
+router.use("/clauses", clausesRouter);
+router.use("/tasks", tasksRouter);
+router.use("/share", sharingRouter);
+
+router.post("/departments", async (req, res) => {
   await connectMongo();
   const { id, name, parentDeptId } = req.body;
   const doc = await Department.findByIdAndUpdate(
@@ -23,7 +31,7 @@ router.post("/department", async (req, res) => {
   res.status(201).json(doc);
 });
 
-router.post("/person", async (req, res) => {
+router.post("/persons", async (req, res) => {
   await connectMongo();
   const { id, userId, name, deptId, directManagerId, roles } = req.body;
   const doc = await Person.findByIdAndUpdate(
@@ -47,106 +55,9 @@ router.post("/person", async (req, res) => {
   res.status(201).json(doc);
 });
 
-router.post("/circular", async (req, res) => {
-  await connectMongo();
-  const {
-    id,
-    title,
-    creatorPersonId,
-    assignedDeptId,
-    parentCircularId,
-    viewers,
-  } = req.body;
-  const doc = await Circular.findByIdAndUpdate(
-    id,
-    { _id: id, title, creatorPersonId, assignedDeptId, parentCircularId },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-  const writes = [];
-  if (creatorPersonId)
-    writes.push(
-      map.circularCreator({ circularId: id, personId: creatorPersonId })
-    );
-  if (assignedDeptId)
-    writes.push(
-      map.circularAssignedDept({ circularId: id, deptId: assignedDeptId })
-    );
-  if (parentCircularId)
-    writes.push(map.circularParent({ parentCircularId, circularId: id }));
-  for (const v of viewers || [])
-    writes.push(map.circularDirectViewer({ circularId: id, personId: v }));
-  await upsertTuples(writes);
-  res.status(201).json(doc);
-});
-
-router.post("/clause", async (req, res) => {
-  await connectMongo();
-  const { id, title, creatorPersonId, parentCircularId, assignedDeptId } =
-    req.body;
-  const doc = await Clause.findByIdAndUpdate(
-    id,
-    { _id: id, title, creatorPersonId, parentCircularId, assignedDeptId },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-  const writes = [];
-  if (creatorPersonId)
-    writes.push(map.clauseCreator({ clauseId: id, personId: creatorPersonId }));
-  if (parentCircularId)
-    writes.push(
-      map.clauseParentCircular({ circularId: parentCircularId, clauseId: id })
-    );
-  if (assignedDeptId)
-    writes.push(
-      map.clauseAssignedDept({ clauseId: id, deptId: assignedDeptId })
-    );
-  await upsertTuples(writes);
-  res.status(201).json(doc);
-});
-
-router.post("/task", async (req, res) => {
-  await connectMongo();
-  const {
-    id,
-    title,
-    creatorPersonId,
-    assigneePersonId,
-    relatedCircularId,
-    relatedClauseId,
-  } = req.body;
-  const doc = await Task.findByIdAndUpdate(
-    id,
-    {
-      _id: id,
-      title,
-      creatorPersonId,
-      assigneePersonId,
-      relatedCircularId,
-      relatedClauseId,
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-  const writes = [];
-  if (creatorPersonId)
-    writes.push(map.taskCreator({ taskId: id, personId: creatorPersonId }));
-  if (assigneePersonId)
-    writes.push(map.taskAssignee({ taskId: id, personId: assigneePersonId }));
-  if (relatedCircularId)
-    writes.push(
-      map.taskRelatedCircular({ taskId: id, circularId: relatedCircularId })
-    );
-  if (relatedClauseId)
-    writes.push(
-      map.taskRelatedClause({ taskId: id, clauseId: relatedClauseId })
-    );
-  await upsertTuples(writes);
-  res.status(201).json(doc);
-});
-
 router.post("/access/check", async (req, res) => {
   const { user, relation, object } = req.body;
-  const r = await (
-    await import("./openfga.js")
-  ).fgaClient.check({ user, relation, object });
+  const r = await fgaClient.check({ user, relation, object });
   res.json(r);
 });
 

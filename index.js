@@ -17,9 +17,9 @@ app.use(authMiddleware);
 app.use("/api", router);
 
 app.post("/signup", (req, res) => {
-  const { username, email } = req.body;
+  const { username, email, personId } = req.body;
   const token = jwt.sign(
-    { username, email },
+    { username, email, personId },
     process.env.JWT_SECRET || "mysupersecret"
   );
   return res.json({ username, token });

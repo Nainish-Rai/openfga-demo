@@ -1,8 +1,112 @@
 import { fgaClient } from "../openfga.js";
+import { connectMongo } from "../db.js";
+import DeptPrnMap from "../models/DeptPrnMap.js";
+import ReportingMap from "../models/ReportingMap.js";
+import CircularClauseMap from "../models/CircularClauseMap.js";
+import Prsntaskmap from "../models/Prsntaskmap.js";
+import Clausetaskmap from "../models/Clausetaskmap.js";
+
+function parseEntity(str = "") {
+  const [type, id] = String(str).split(":");
+  return { type, id };
+}
+
+async function persistMappings(writes = []) {
+  const ops = [];
+  for (const t of writes) {
+    const { user, relation, object } = t;
+    const u = parseEntity(user);
+    const o = parseEntity(object);
+
+    // F: DeptPrnMap (B <-> F <-> A)
+    if (
+      o.type === "department" &&
+      u.type === "person" &&
+      ["member", "manager", "dept_head", "compliance_officer"].includes(
+        relation
+      )
+    ) {
+      ops.push(
+        DeptPrnMap.updateOne(
+          { deptId: o.id, personId: u.id, role: relation },
+          { $setOnInsert: { deptId: o.id, personId: u.id, role: relation } },
+          { upsert: true }
+        )
+      );
+      continue;
+    }
+
+    // J: ReportingMap (B <-> J)
+    if (
+      o.type === "person" &&
+      u.type === "person" &&
+      relation === "direct_manager"
+    ) {
+      ops.push(
+        ReportingMap.updateOne(
+          { managerId: u.id, subordinateId: o.id },
+          { $setOnInsert: { managerId: u.id, subordinateId: o.id } },
+          { upsert: true }
+        )
+      );
+      continue;
+    }
+
+    // I: CircularClauseMap (C <-> I <-> E)
+    if (
+      o.type === "clause" &&
+      u.type === "circular" &&
+      relation === "parent_circular"
+    ) {
+      ops.push(
+        CircularClauseMap.updateOne(
+          { circularId: u.id, clauseId: o.id },
+          { $setOnInsert: { circularId: u.id, clauseId: o.id } },
+          { upsert: true }
+        )
+      );
+      continue;
+    }
+
+    // G: Prsntaskmap (B <-> G <-> D)
+    if (
+      o.type === "task" &&
+      u.type === "person" &&
+      ["creator", "assignee"].includes(relation)
+    ) {
+      ops.push(
+        Prsntaskmap.updateOne(
+          { taskId: o.id, personId: u.id, role: relation },
+          { $setOnInsert: { taskId: o.id, personId: u.id, role: relation } },
+          { upsert: true }
+        )
+      );
+      continue;
+    }
+
+    // H: Clausetaskmap (E <-> H <-> D)
+    if (
+      o.type === "task" &&
+      u.type === "clause" &&
+      relation === "related_clause"
+    ) {
+      ops.push(
+        Clausetaskmap.updateOne(
+          { clauseId: u.id, taskId: o.id },
+          { $setOnInsert: { clauseId: u.id, taskId: o.id } },
+          { upsert: true }
+        )
+      );
+      continue;
+    }
+  }
+  if (ops.length) await Promise.all(ops);
+}
 
 export async function upsertTuples(writes) {
   if (!writes.length) return;
-  await fgaClient.write({ writes });
+  await connectMongo();
+  await Promise.all([fgaClient.write({ writes }), persistMappings(writes)]);
 }
 
 export const map = {

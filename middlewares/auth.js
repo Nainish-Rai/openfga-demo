@@ -3,11 +3,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-/**
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 export const authMiddleware = function (req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return next();
